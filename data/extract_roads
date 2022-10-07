@@ -1,0 +1,7 @@
+#! /bin/bash
+
+#osmosis --read-xml map.osm --tf accept-ways highway=* --used-node --write-xml highwaysx.osm
+osmosis --read-xml old_jerusalem.osm \
+        --tf accept-ways highway=* \
+        --used-node --write-xml old_jerusalem_r.osm
+
