@@ -1,1 +1,1 @@
- ffmpeg -framerate 12 -i %06d.png -c:v libx264 -r 30 -pix_fmt yuv420p new_dijkstra.mp4
+ ffmpeg -framerate 12 -i frames/%06d.png -c:v libx264 -r 30 -pix_fmt yuv420p $1

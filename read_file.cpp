@@ -211,6 +211,12 @@ private:
     std::vector<Vertex>  sp_p;
     std::vector<double>  sp_d;
 
+    // Neck Cut values
+    double totalDist;
+    long edgeCountWavefront;
+    double neckRatioMax = 0;
+    double neckRatioDistMax = 0;
+
     void  draw_segment( cairo_t *cr, Mapper  & trans, Edge  e,
                         double  dist );
     void  draw_page( Mapper  & trans, cairo_t *cr, double  dist );
@@ -564,13 +570,22 @@ void  GraphExt::draw_segment( cairo_t *cr,
     /// Drawing the wter level...
     if ( l_a.d > dist )
         return;
+    
+    // double scale_param = 1.2;
+    double scale_param = 1;
 
+    // Edge is already traversed, color blue
     cairo_set_source_rgb( cr, 0, 0, 1 );
     cairo_set_line_width(cr, 8 );    
-    if ( ( l_a.d + 1.2 * len) <= dist ) {
+    if ( ( l_a.d + scale_param * len) <= dist ) {
+        if (l_a.d<neckRatioDistMax && l_b.d>=neckRatioDistMax){
+             cairo_set_source_rgb( cr, 0, 1, 0);
+        }
         cairo_move_to(cr, pa.x(), pa.y() );
         cairo_line_to(cr, pb.x(), pb.y() );
         cairo_stroke(cr);
+        cairo_set_source_rgb( cr, 0, 0, 1);
+        totalDist += std::sqrt((pb.x()-pa.x())*(pb.x()-pa.x()) + (pb.y()-pa.y())*(pb.y()-pa.y()));
         return;
     }
 
@@ -578,6 +593,8 @@ void  GraphExt::draw_segment( cairo_t *cr,
 
     /// We start with the case that (we imagine that v_a is inside,
     /// but v_b is outside.
+
+    // We are traversing this edge from v_a.
     double  delta = ( dist - l_a.d ) / len; // between zero and one.
     if  ( delta > 1.0 )
         delta = 1.0;
@@ -588,9 +605,13 @@ void  GraphExt::draw_segment( cairo_t *cr,
     cairo_move_to(cr, pa.x(), pa.y() );
     cairo_line_to(cr, pmid.x(), pmid.y() );
     cairo_stroke(cr);
+    double drawn_len = std::sqrt((pmid.x()-pa.x())*(pmid.x()-pa.x()) + (pmid.y()-pa.y())*(pmid.y()-pa.y()));
 
-    if ( l_b.d > dist )
+    if ( l_b.d > dist ){
+        edgeCountWavefront+=1;
+        totalDist += drawn_len;
         return;
+    }
 
     /// We have to draw the water from v_b...
     delta = ( dist - l_b.d ) / len; // between zero and one.
@@ -599,7 +620,10 @@ void  GraphExt::draw_segment( cairo_t *cr,
     pmid = trans.map( mid );
     cairo_move_to(cr, pb.x(), pb.y() );
     cairo_line_to(cr, pmid.x(), pmid.y() );
-    cairo_stroke(cr);    
+    cairo_stroke(cr);
+    drawn_len +=  std::sqrt((pmid.x()-pb.x())*(pmid.x()-pb.x()) + (pmid.y()-pb.y())*(pmid.y()-pb.y()));
+    totalDist += drawn_len;
+    edgeCountWavefront+=2;
 }
 
 
@@ -616,6 +640,7 @@ void  GraphExt::draw_page( Mapper  & trans,
     //cairo_stroke(cr);
     page_drawn++;   // count the pages already drawn
     
+    // Zoom out as distance increases
     Box2d  n_bb = get_active_bbox( dist * 1.5 );
     
     trans.reset_viewport( n_bb );
@@ -625,6 +650,9 @@ void  GraphExt::draw_page( Mapper  & trans,
     cairo_set_line_width(cr, 0.2 );    
     //////////////////////////////////////////////////////////
 
+    // Draw every edge in the graph.
+    edgeCountWavefront = 0;
+    totalDist = 0;
     EdgeIterator  ei, ei_end;
     for (tie(ei, ei_end) = edges(g); ei != ei_end; ++ei) {
         cairo_set_line_cap  (cr, CAIRO_LINE_CAP_ROUND);
@@ -632,6 +660,7 @@ void  GraphExt::draw_page( Mapper  & trans,
         
     }
 
+    // Draw source point
     if  ( src >= 0 ) {
         Point2d   m = trans.map( locs[ src ].loc );
         
@@ -658,7 +687,38 @@ void  GraphExt::draw_page( Mapper  & trans,
 
     cairo_move_to(cr, 20, 34);
     cairo_show_text(cr, buf );
-    cairo_stroke(cr);            
+    cairo_stroke(cr);
+
+    // Print accumulated distance
+    sprintf( buf, "Total Distance: %g  ", totalDist );
+
+
+    cairo_move_to(cr, 20, 68);
+    cairo_show_text(cr, buf );
+    cairo_stroke(cr); 
+
+    // Print Edges in wavefront
+    sprintf( buf, "Current Wavefront: %ld  ", edgeCountWavefront );
+
+
+    cairo_move_to(cr, 20, 34*3);
+    cairo_show_text(cr, buf );
+    cairo_stroke(cr);
+
+    // Compute Ratio, total dist / wavefront count **2 
+    double neck_ratio =   totalDist / (double)(edgeCountWavefront*edgeCountWavefront);
+    if ( std::max(neck_ratio, neckRatioMax)==neck_ratio){
+        neckRatioMax = neck_ratio;
+        neckRatioDistMax = dist;
+    }
+
+    // Neck Cut ratio
+    sprintf( buf, "CNCR: %g; MNCR: %g, @ Dist: %g", neck_ratio, neckRatioMax, neckRatioDistMax);
+
+
+    cairo_move_to(cr, 20, 34*4);
+    cairo_show_text(cr, buf );
+    cairo_stroke(cr);
 
     
     cairo_show_page( cr );
@@ -673,6 +733,7 @@ void  GraphExt::draw_page_ext( Mapper      & trans,
 {
     char   buf[ 1024 ];
     
+    // Set up cairo surface for images
     if  ( f_png ) {
         sprintf( buf, "frames/%06d.png", page_drawn );
         printf( "  %s\n", buf );
@@ -681,9 +742,11 @@ void  GraphExt::draw_page_ext( Mapper      & trans,
               trans.get_out_height() );
         cr = cairo_create(surface);
     }
-        
+    
+    // Draw image
     draw_page( trans, cr, dist );
     
+    // Write to png and clean up surface.
     if  ( f_png ) {
         cairo_surface_write_to_png( surface, buf );
         cairo_destroy (cr);
@@ -691,7 +754,7 @@ void  GraphExt::draw_page_ext( Mapper      & trans,
     }
 }
 
-
+// This function draws a frame for each distance value in range, incremented by delta
 void  GraphExt::draw_dist_range(
                                 Mapper      & trans,
                                 cairo_surface_t_ptr  & surface,
@@ -704,17 +767,19 @@ void  GraphExt::draw_dist_range(
 
     d = d_start;
 
+    // Draw a page for each dist in our range, increasing it by delta each iteration.
     do { 
         draw_page_ext( trans, surface, cr, d );
         d += d_delta;
     } while  ( d < d_end );    
 }
 
-                         
+// This function draws the graph + continous dijkstra as as series of pngs, or onto a page on the output pdf.                         
 
 void  GraphExt::draw( Mapper  & trans, const char  * out_pdf,
                       double  dist )
 {
+    // Should we output png frames
     f_png = true;
 
     //////////////////////////////////////////////////////////
@@ -723,33 +788,30 @@ void  GraphExt::draw( Mapper  & trans, const char  * out_pdf,
     cairo_surface_t *surface;
     cairo_t *cr;
 
+    // Frame or page counter
     page_drawn = 0;
-    //int  size = 1024 + scale + frame ;
 
     if  ( ! f_png ) {
+        //Create PDF surface from cairo
         surface = (cairo_surface_t *)cairo_pdf_surface_create
         ( out_pdf, trans.get_out_width(),
           trans.get_out_height() );
         cr = cairo_create(surface);
     } else {
+        // If we're not using pdf builder, NULL them
         surface = NULL;
         cr = NULL;
     }
 
-    //draw_dist_range( trans, surface, cr, 0, 50000, 256 );
-
-    //draw_dist_range( trans, surface, cr, 0, 50, 0.5 );
-    //    draw_dist_range( trans, surface, cr, 51, 100, 1 );
+    // Draw the series of distances with increasing rates as we grow further from source.
     draw_dist_range( trans, surface, cr, 0, 200, 1 );
     draw_dist_range( trans, surface, cr, 200, 400, 2 );
     draw_dist_range( trans, surface, cr, 400, 800, 2 );
     draw_dist_range( trans, surface, cr, 800, 1600, 4 );
     draw_dist_range( trans, surface, cr, 1600, 3200, 8 );
     draw_dist_range( trans, surface, cr, 3200, 6400, 32 );
-    /*
-    draw_dist_range( trans, surface, cr,0, 50000, 256 );
-    */
 
+    // Clean up cairo surfaces if outputing to pdf.
     if  ( ! f_png ) {
         cairo_destroy (cr);
         cairo_surface_destroy (surface);
@@ -794,16 +856,23 @@ void  read_map( GraphExt  & ge, const char  * filename )
 
 
 
-int main()
+int main(int argc, char* argv[])
 {
     GraphExt  ge;
     double image_width = 1920;
     double image_height = 1080;
     double image_frame = 10;
 
-    //    read_map( ge, "data/highways.osm" );
-    //read_map( ge, "data/siebel.osm" );
-    read_map( ge, "data/old_jerusalem_r.osm" );
+
+    // Choose a default map, or one supplied by cmd line.
+    if (argc==1){
+        //read_map( ge, "data/highways.osm" );
+        read_map( ge, "data/siebel.osm" );
+        // read_map( ge, "data/old_jerusalem_r.osm" );
+    } else{
+        read_map( ge, argv[1]);
+    }
+    
     
     ge.shift_points_to_origin();
     ge.update_edges_len();
