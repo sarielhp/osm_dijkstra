@@ -576,15 +576,15 @@ void  GraphExt::draw_segment( cairo_t *cr,
 
     // Edge is already traversed, color blue
     cairo_set_source_rgb( cr, 0, 0, 1 );
+    if (l_a.d<neckRatioDistMax && l_b.d>=neckRatioDistMax){
+        cairo_set_source_rgb( cr, 0, 1, 0);
+    }
     cairo_set_line_width(cr, 8 );    
     if ( ( l_a.d + scale_param * len) <= dist ) {
-        if (l_a.d<neckRatioDistMax && l_b.d>=neckRatioDistMax){
-             cairo_set_source_rgb( cr, 0, 1, 0);
-        }
+
         cairo_move_to(cr, pa.x(), pa.y() );
         cairo_line_to(cr, pb.x(), pb.y() );
         cairo_stroke(cr);
-        cairo_set_source_rgb( cr, 0, 0, 1);
         totalDist += std::sqrt((pb.x()-pa.x())*(pb.x()-pa.x()) + (pb.y()-pa.y())*(pb.y()-pa.y()));
         return;
     }
