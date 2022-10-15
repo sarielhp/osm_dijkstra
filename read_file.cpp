@@ -804,12 +804,13 @@ void  GraphExt::draw( Mapper  & trans, const char  * out_pdf,
     }
 
     // Draw the series of distances with increasing rates as we grow further from source.
-    draw_dist_range( trans, surface, cr, 0, 200, 1 );
-    draw_dist_range( trans, surface, cr, 200, 400, 2 );
-    draw_dist_range( trans, surface, cr, 400, 800, 2 );
-    draw_dist_range( trans, surface, cr, 800, 1600, 4 );
-    draw_dist_range( trans, surface, cr, 1600, 3200, 8 );
-    draw_dist_range( trans, surface, cr, 3200, 6400, 32 );
+    draw_dist_range( trans, surface, cr, 0, 180000, 1800);
+    // draw_dist_range( trans, surface, cr, 0, 200, 1 );
+    // draw_dist_range( trans, surface, cr, 200, 400, 2 );
+    // draw_dist_range( trans, surface, cr, 400, 800, 2 );
+    // draw_dist_range( trans, surface, cr, 800, 1600, 4 );
+    // draw_dist_range( trans, surface, cr, 1600, 3200, 8 );
+    // draw_dist_range( trans, surface, cr, 3200, 6400, 32 );
 
     // Clean up cairo surfaces if outputing to pdf.
     if  ( ! f_png ) {
@@ -893,8 +894,15 @@ int main(int argc, char* argv[])
     printf( "width  = %d\n", trans.get_out_width() );
     printf( "height = %d\n", trans.get_out_height() );
 
-    //ge.get_source( 0.75, 0.5 );
-    ge.get_source( 0.45, 0.53 );
+    // .6, .72 for big champaign
+    double x = .5;
+    double y = .5;
+    if (argc==4){
+        x = std::stof(argv[2]);
+        y = std::stof(argv[3]);
+    }
+    ge.get_source( x, y );
+    // ge.get_source( 0.45, 0.53 );
     ge.compute_shortest_path();
     
     ge.draw( trans, "map.pdf", 200 );
